@@ -1,10 +1,10 @@
 import React from 'react';
-import { Wallet, FileText, Database, Shield, LogOut, User as UserIcon } from 'lucide-react';
+import { Wallet, FileText, Database, Shield, LogOut, User as UserIcon, BarChart3 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { LOGO_URL } from '../constants';
 
 interface NavbarProps {
-  onNavChange: (view: 'dashboard' | 'statement' | 'sql' | 'admin') => void;
+  onNavChange: (view: 'dashboard' | 'statement' | 'reports' | 'sql' | 'admin') => void;
   activeView: string;
   currentUser: User;
   onLogout: () => void;
@@ -14,6 +14,7 @@ const Navbar: React.FC<NavbarProps> = ({ onNavChange, activeView, currentUser, o
   const navItems = [
     { id: 'dashboard', label: 'Home', icon: <Wallet size={20} /> },
     { id: 'statement', label: 'History', icon: <FileText size={20} /> },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} /> },
     ...(currentUser.role === UserRole.ADMIN ? [
       { id: 'admin', label: 'Admin', icon: <Shield size={20} /> },
       { id: 'sql', label: 'Dev', icon: <Database size={20} /> }

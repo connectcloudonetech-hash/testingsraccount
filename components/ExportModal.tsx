@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Cloud, CheckCircle2, Loader2, FileSpreadsheet, ExternalLink, ShieldCheck } from 'lucide-react';
-import { Transaction } from '../types';
+import { X, Download, Cloud, CheckCircle2, Loader2, FileSpreadsheet, ExternalLink, ShieldCheck, FileText } from 'lucide-react';
+import { Transaction, TransactionType } from '../types';
 import { downloadTransactionsAsCSV } from '../utils/exportUtils';
+import { generateFinancialPDF } from '../utils/pdfExportUtils';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -51,6 +52,18 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, transactions
     }, 900);
   };
 
+  const handlePDFExport = () => {
+    const income = transactions.filter(t => t.type === TransactionType.INCOME).reduce((s, t) => s + t.amount, 0);
+    const expense = transactions.filter(t => t.type === TransactionType.EXPENSE).reduce((s, t) => s + t.amount, 0);
+    
+    generateFinancialPDF(transactions, {
+      title: 'Ledger Statement',
+      period: `Statement as of ${new Date().toLocaleDateString()}`,
+      stats: { income, expense, balance: income - expense }
+    });
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -82,10 +95,24 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, transactions
                   <FileSpreadsheet size={24} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-slate-900">Download CSV</h3>
+                  <h3 className="font-bold text-slate-900">Excel / CSV Download</h3>
                   <p className="text-xs text-slate-500">Universal format for SR INFOTECH accounting.</p>
                 </div>
                 <Download size={20} className="text-slate-300 group-hover:text-emerald-500 transition-colors" />
+              </button>
+
+              <button
+                onClick={handlePDFExport}
+                className="group flex items-center gap-4 p-5 border-2 border-slate-100 rounded-3xl hover:border-rose-200 hover:bg-rose-50/30 transition-all text-left"
+              >
+                <div className="bg-rose-100 text-rose-600 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+                  <FileText size={24} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-900">PDF Report</h3>
+                  <p className="text-xs text-slate-500">Official formatted financial document.</p>
+                </div>
+                <Download size={20} className="text-slate-300 group-hover:text-rose-500 transition-colors" />
               </button>
 
               <button

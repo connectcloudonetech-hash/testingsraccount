@@ -6,18 +6,19 @@ import ConfirmModal from './components/ConfirmModal';
 import ExportModal from './components/ExportModal';
 import LoginPage from './components/LoginPage';
 import AdminPage from './components/AdminPage';
+import ReportPage from './components/ReportPage';
 import TransactionFilters, { FilterState } from './components/TransactionFilters';
 import { Transaction, TransactionType, DashboardStats, User, UserRole } from './types';
 import { MOCK_TRANSACTIONS, SQL_SNIPPET, PARTICULARS, INITIAL_USERS, CURRENCY, NAMES, LOGO_SVG } from './constants';
 import { getSupabaseClient, TABLES, isSupabaseConfigured, saveCloudCredentials, clearCloudCredentials } from './services/supabaseClient';
-import { History, Download, SearchX, Plus, ChevronRight, Inbox, Smartphone, X, AlertCircle, ExternalLink, RefreshCw, WifiOff, CloudOff, Info, Settings, Database, CheckCircle2 } from 'lucide-react';
+import { History, Download, SearchX, Plus, ChevronRight, Inbox, Smartphone, X, AlertCircle, ExternalLink, RefreshCw, WifiOff, CloudOff, Info, Settings, Database, CheckCircle2, Filter } from 'lucide-react';
 
 const LOCAL_STORAGE_KEY = 'sr_fintrack_local_data';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>(INITIAL_USERS);
-  const [view, setView] = useState<'dashboard' | 'statement' | 'sql' | 'admin'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'statement' | 'reports' | 'sql' | 'admin'>('dashboard');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDbConnected, setIsDbConnected] = useState(false);
@@ -32,13 +33,13 @@ const App: React.FC = () => {
 
   const [cloudUrl, setCloudUrl] = useState(localStorage.getItem('sr_supabase_url') || '');
   const [cloudKey, setCloudKey] = useState(localStorage.getItem('sr_supabase_key') || '');
-  // Updated default email as requested
   const [driveAccount, setDriveAccount] = useState(localStorage.getItem('sr_drive_account') || 'connectcloudonetech@gmail.com');
   
   const [availableNames, setAvailableNames] = useState<string[]>(NAMES);
   const [availableParticulars, setAvailableParticulars] = useState<string[]>(PARTICULARS);
 
   const [filters, setFilters] = useState<FilterState>({
+    period: 'All',
     startDate: '',
     endDate: '',
     category: 'All',
@@ -176,8 +177,8 @@ const App: React.FC = () => {
       const matchesType = filters.type === 'All' || t.type === filters.type;
       const matchesCategory = filters.category === 'All' || t.particular === filters.category;
       const matchesName = filters.name === 'All' || t.name === filters.name;
-      const matchesStart = !filters.startDate || new Date(t.date) >= new Date(filters.startDate);
-      const matchesEnd = !filters.endDate || new Date(t.date) <= new Date(filters.endDate);
+      const matchesStart = !filters.startDate || t.date >= filters.startDate;
+      const matchesEnd = !filters.endDate || t.date <= filters.endDate;
       
       const searchLower = filters.search.toLowerCase();
       const matchesSearch = !filters.search || 
@@ -190,10 +191,10 @@ const App: React.FC = () => {
   }, [transactions, filters]);
 
   const stats: DashboardStats = useMemo(() => {
-    const totalIn = transactions
+    const totalIn = filteredTransactions
       .filter(t => t.type === TransactionType.INCOME)
       .reduce((sum, t) => sum + t.amount, 0);
-    const totalOut = transactions
+    const totalOut = filteredTransactions
       .filter(t => t.type === TransactionType.EXPENSE)
       .reduce((sum, t) => sum + t.amount, 0);
     
@@ -210,7 +211,7 @@ const App: React.FC = () => {
       .sort((a, b) => a.month.localeCompare(b.month));
 
     return { totalIn, totalOut, balance: totalIn - totalOut, monthlyData };
-  }, [transactions]);
+  }, [filteredTransactions, transactions]);
 
   const handleAddTransaction = async (newT: Omit<Transaction, 'id'>) => {
     const localT = { ...newT, id: Math.random().toString(36).substr(2, 9) } as Transaction;
@@ -265,7 +266,7 @@ const App: React.FC = () => {
   };
 
   const resetFilters = () => {
-    setFilters({ startDate: '', endDate: '', category: 'All', type: 'All', name: 'All', search: '' });
+    setFilters({ period: 'All', startDate: '', endDate: '', category: 'All', type: 'All', name: 'All', search: '' });
   };
 
   if (!currentUser) {
@@ -337,10 +338,26 @@ const App: React.FC = () => {
               </div>
             </header>
 
+            {/* Dashboard Filter Section */}
+            <div className="bg-white/50 p-6 rounded-[2.5rem] border border-slate-100/50 backdrop-blur-sm shadow-sm">
+              <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+                <Filter size={14} className="text-[#E31E24]" />
+                Intelligence Filters
+              </div>
+              <TransactionFilters 
+                filters={filters} 
+                onFilterChange={setFilters} 
+                onReset={resetFilters} 
+                names={availableNames} 
+                particulars={availableParticulars} 
+                hideSearch={true}
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <StatCard title="Total Cash In" amount={stats.totalIn} type="income" />
-              <StatCard title="Total Cash Out" amount={stats.totalOut} type="expense" />
-              <StatCard title="Current Liquidity" amount={stats.balance} type="total" />
+              <StatCard title={`Cash In (${filters.period})`} amount={stats.totalIn} type="income" />
+              <StatCard title={`Cash Out (${filters.period})`} amount={stats.totalOut} type="expense" />
+              <StatCard title={`Net Result (${filters.period})`} amount={stats.balance} type="total" />
             </div>
 
             <div className="flex items-center justify-between mt-12">
@@ -358,8 +375,8 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 gap-4">
               {isLoading && transactions.length === 0 ? (
                 Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-white rounded-[2rem] border border-slate-100 shimmer" />)
-              ) : transactions.length > 0 ? (
-                transactions.slice(0, 8).map((t) => (
+              ) : filteredTransactions.length > 0 ? (
+                filteredTransactions.slice(0, 8).map((t) => (
                   <div key={t.id} onClick={() => handleEditRequest(t)} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex items-center justify-between hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer group active:scale-[0.99]">
                     <div className="flex items-center gap-5">
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl ${t.type === TransactionType.INCOME ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
@@ -400,7 +417,14 @@ const App: React.FC = () => {
               </button>
             </header>
 
-            <TransactionFilters filters={filters} onFilterChange={setFilters} onReset={resetFilters} names={availableNames} particulars={availableParticulars} />
+            <TransactionFilters 
+              filters={filters} 
+              onFilterChange={setFilters} 
+              onReset={resetFilters} 
+              names={availableNames} 
+              particulars={availableParticulars} 
+              hideSearch={true}
+            />
 
             <div className="space-y-4 pb-20">
               {isLoading && transactions.length === 0 ? (
@@ -435,138 +459,126 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {view === 'admin' && currentUser.role === UserRole.ADMIN && (
-          <AdminPage users={allUsers} onAddUser={(u) => setAllUsers([...allUsers, {...u, id: Math.random().toString()}])} onRemoveUser={(id) => setAllUsers(allUsers.filter(user => user.id !== id))} />
+        {view === 'reports' && (
+          <ReportPage transactions={transactions} />
         )}
 
-        {view === 'sql' && currentUser.role === UserRole.ADMIN && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-             <header className="flex flex-col gap-1">
-               <p className="text-[#E31E24] font-bold text-xs uppercase tracking-[0.2em]">Developer Console</p>
-               <h1 className="text-3xl font-black text-slate-900 tracking-tight">Database Insights</h1>
-             </header>
-             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex gap-4 text-blue-900 items-start shadow-sm">
-               <div className="p-3 bg-white rounded-2xl shadow-sm text-blue-600">
-                 <Database size={24} />
-               </div>
-               <div>
-                 <h3 className="font-black text-sm mb-1">Initialize or Fix Schema</h3>
-                 <p className="text-xs font-bold leading-relaxed opacity-80">
-                   If you see "column transactions.date does not exist", copy the code below and run it in your <b>Supabase SQL Editor</b>. It will add the missing columns and set up the correct table structure.
-                 </p>
-               </div>
-             </div>
-             <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl overflow-hidden font-mono text-xs leading-relaxed border-4 border-slate-800 relative group">
-               <button 
-                onClick={() => { navigator.clipboard.writeText(SQL_SNIPPET); }}
-                className="absolute top-4 right-4 bg-slate-800 text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-700 transition-all text-[10px] font-bold"
-               >
-                 COPY SQL
-               </button>
-               <pre className="text-emerald-400 whitespace-pre-wrap">{SQL_SNIPPET}</pre>
-             </div>
+        {view === 'admin' && (
+          <AdminPage 
+            users={allUsers} 
+            onAddUser={(u) => setAllUsers([...allUsers, { ...u, id: Math.random().toString(36).substr(2, 9) }])} 
+            onRemoveUser={(id) => setAllUsers(allUsers.filter(u => u.id !== id))} 
+          />
+        )}
+
+        {view === 'sql' && (
+          <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white space-y-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Database className="text-[#E31E24]" size={32} />
+              <h1 className="text-3xl font-black">Developer Console</h1>
+            </div>
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+              <h3 className="font-bold text-slate-300 mb-2 flex items-center gap-2">
+                <Info size={16} /> Database Setup Script
+              </h3>
+              <p className="text-xs text-slate-400 mb-4">Run this in your Supabase SQL Editor to ensure the schema is up to date.</p>
+              <pre className="bg-black/50 p-6 rounded-2xl overflow-x-auto text-xs font-mono text-emerald-400 no-scrollbar">
+                {SQL_SNIPPET}
+              </pre>
+            </div>
           </div>
         )}
       </main>
 
-      {showCloudModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowCloudModal(false)} />
-          <div className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl p-10 animate-in zoom-in-95 duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
-            <div className="flex items-center justify-between mb-8">
-              <div className="p-4 bg-red-50 text-[#E31E24] rounded-2xl">
-                <Database size={28} />
-              </div>
-              <button onClick={() => setShowCloudModal(false)} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Cloud Configuration</h2>
-            <p className="text-slate-500 text-sm mb-8 leading-relaxed">Modify your Supabase and Google Drive settings. Data is stored locally in this browser.</p>
-            
-            <form onSubmit={handleCloudSetup} className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-50 pb-2">Supabase Database</h3>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project URL</label>
-                  <input 
-                    type="text" 
-                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-[#E31E24] outline-none text-sm font-bold text-slate-900"
-                    placeholder="https://your-project.supabase.co"
-                    value={cloudUrl}
-                    onChange={e => setCloudUrl(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Anon API Key</label>
-                  <input 
-                    type="password" 
-                    className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-[#E31E24] outline-none text-sm font-bold text-slate-900"
-                    placeholder="API Key Token..."
-                    value={cloudKey}
-                    onChange={e => setCloudKey(e.target.value)}
-                  />
-                </div>
-              </div>
+      {/* Modals & Overlays */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setShowAddForm(false); setEditingTransaction(null); }} />
+          <div className="relative bg-white w-full max-w-xl rounded-[3rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh] no-scrollbar">
+            <TransactionForm 
+              onAdd={handleAddTransaction} 
+              onUpdate={handleUpdateTransaction} 
+              onDelete={(id) => setDeleteConfirmId(id)}
+              editingTransaction={editingTransaction}
+              onCancelEdit={() => { setShowAddForm(false); setEditingTransaction(null); }}
+              availableNames={availableNames}
+              availableParticulars={availableParticulars}
+            />
+          </div>
+        </div>
+      )}
 
-              <div className="space-y-4 pt-2">
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-50 pb-2">Google Drive Sync</h3>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Target Account Email</label>
-                  <div className="relative">
-                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                    <input 
-                      type="email" 
-                      className="w-full pl-11 pr-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-400 outline-none text-sm font-bold text-slate-900"
-                      placeholder="e.g. connectcloudonetech@gmail.com"
-                      value={driveAccount}
-                      onChange={e => setDriveAccount(e.target.value)}
-                    />
-                  </div>
-                  <p className="text-[9px] text-slate-400 font-bold ml-1">Sync exports directly to this workspace account.</p>
-                </div>
+      <ConfirmModal 
+        isOpen={!!deleteConfirmId} 
+        onClose={() => setDeleteConfirmId(null)} 
+        onConfirm={() => deleteConfirmId && handleDeleteTransaction(deleteConfirmId)} 
+        title="Delete Transaction?" 
+        message="This action cannot be undone. The entry will be permanently removed from the ledger." 
+      />
+
+      <ExportModal 
+        isOpen={isExportModalOpen} 
+        onClose={() => setIsExportModalOpen(false)} 
+        transactions={filteredTransactions} 
+        driveAccount={driveAccount} 
+      />
+
+      {showCloudModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCloudModal(false)} />
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <CloudOff className="text-[#E31E24]" size={24} />
+                <h2 className="text-2xl font-black text-slate-900">Cloud Sync</h2>
               </div>
-              
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => { clearCloudCredentials(); localStorage.removeItem('sr_drive_account'); setShowCloudModal(false); window.location.reload(); }}
-                  className="flex-1 py-4 px-6 border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
-                >
-                  Reset Defaults
-                </button>
-                <button
-                  type="submit"
-                  className="flex-[2] py-4 px-6 bg-[#E31E24] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all shadow-xl shadow-red-100 flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 size={18} />
-                  Save Changes
-                </button>
+              <button onClick={() => setShowCloudModal(false)} className="text-slate-400 hover:text-slate-600"><X /></button>
+            </div>
+            <form onSubmit={handleCloudSetup} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Supabase Project URL</label>
+                <input 
+                  type="text" 
+                  className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-[#E31E24] font-mono text-xs"
+                  value={cloudUrl}
+                  onChange={e => setCloudUrl(e.target.value)}
+                  placeholder="https://your-project.supabase.co"
+                />
               </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Anon API Key</label>
+                <input 
+                  type="password" 
+                  className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-[#E31E24] font-mono text-xs"
+                  value={cloudKey}
+                  onChange={e => setCloudKey(e.target.value)}
+                  placeholder="eyJhbG..."
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Organization Email</label>
+                <input 
+                  type="email" 
+                  className="w-full px-4 py-3 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-[#E31E24] font-bold text-xs"
+                  value={driveAccount}
+                  onChange={e => setDriveAccount(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs mt-4">Save Configuration</button>
             </form>
           </div>
         </div>
       )}
 
-      {showAddForm && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setShowAddForm(false); setEditingTransaction(null); }} />
-          <div className="relative w-full max-w-2xl bg-white rounded-t-[3rem] sm:rounded-[3rem] shadow-2xl p-8 sm:p-12 animate-in slide-in-from-bottom-12 duration-500 overflow-y-auto max-h-[95vh] no-scrollbar">
-            <TransactionForm onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={(id) => setDeleteConfirmId(id)} editingTransaction={editingTransaction} onCancelEdit={() => { setShowAddForm(false); setEditingTransaction(null); }} availableNames={availableNames} availableParticulars={availableParticulars} />
-          </div>
-        </div>
+      {/* Floating Add Button */}
+      {!showAddForm && (
+        <button 
+          onClick={() => { setEditingTransaction(null); setShowAddForm(true); }}
+          className="fixed bottom-24 right-6 md:bottom-10 md:right-10 z-[55] w-16 h-16 bg-[#E31E24] text-white rounded-full shadow-2xl shadow-red-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all group"
+        >
+          <Plus size={32} className="group-hover:rotate-90 transition-transform" />
+        </button>
       )}
-
-      <button 
-        onClick={() => { setEditingTransaction(null); setShowAddForm(true); }} 
-        className="fixed bottom-24 right-6 md:right-10 md:bottom-10 z-[70] w-16 h-16 bg-[#E31E24] text-white rounded-[2rem] shadow-2xl shadow-red-200/50 flex items-center justify-center transition-all hover:scale-110 active:scale-95 animate-in zoom-in duration-300 border-4 border-white"
-      >
-        <Plus size={32} />
-      </button>
-
-      <ConfirmModal isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)} onConfirm={() => handleDeleteTransaction(deleteConfirmId!)} title="Delete entry?" message="This transaction will be permanently removed from the company records." />
-      <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} transactions={transactions} driveAccount={driveAccount} />
     </div>
   );
 };

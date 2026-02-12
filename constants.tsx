@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Transaction, TransactionType, User, UserRole } from './types';
 
@@ -6,7 +7,8 @@ export const LOGO_URL = 'https://raw.githubusercontent.com/connectcloudonetech-h
 
 export const INITIAL_USERS: User[] = [
   { id: 'u1', username: 'admin', name: 'SR Admin', role: UserRole.ADMIN, password: 'password123' },
-  { id: 'u2', username: 'staff', name: 'SR Staff', role: UserRole.STAFF, password: 'password123' }
+  { id: 'u2', username: 'staff', name: 'SR Staff', role: UserRole.STAFF, password: 'password123' },
+  { id: 'u3', username: 'srfareed', name: 'SR Fareed', role: UserRole.ADMIN, password: 'Limras@786' }
 ];
 
 export const NAMES: string[] = [
@@ -115,10 +117,7 @@ export const LOGO_SVG = (className?: string) => (
 export const SQL_SNIPPET = `-- Run this in your Supabase SQL Editor
 -- This will ensure your schema matches the application requirements exactly.
 
--- 1. OPTIONAL: Cleanup existing table if you want to reset (CAUTION: DELETES DATA)
--- DROP TABLE IF EXISTS transactions;
-
--- 2. Create the Transactions Table with the 'date' column
+-- 1. Create the Transactions Table
 CREATE TABLE IF NOT EXISTS transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -127,11 +126,11 @@ CREATE TABLE IF NOT EXISTS transactions (
   amount NUMERIC NOT NULL,
   type TEXT CHECK (type IN ('income', 'expense')) NOT NULL,
   category TEXT NOT NULL,
-  date DATE NOT NULL DEFAULT CURRENT_DATE, -- THIS IS THE MISSING COLUMN
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Create the Users Table
+-- 2. Create the Users Table
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT UNIQUE NOT NULL,
@@ -141,16 +140,18 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Insert Initial Admin User
+-- 3. Insert Initial Admin Users
 INSERT INTO users (username, name, role, password)
-VALUES ('admin', 'SR Admin', 'admin', 'password123')
+VALUES 
+('admin', 'SR Admin', 'admin', 'password123'),
+('srfareed', 'SR Fareed', 'admin', 'Limras@786')
 ON CONFLICT (username) DO NOTHING;
 
--- 5. Set up Row Level Security (RLS)
+-- 4. Set up Row Level Security (RLS)
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- 6. Create permissive policies for initial setup (Fine-tune these later)
+-- 5. Create permissive policies for initial setup
 DROP POLICY IF EXISTS "Public Read" ON transactions;
 CREATE POLICY "Public Read" ON transactions FOR SELECT USING (true);
 
